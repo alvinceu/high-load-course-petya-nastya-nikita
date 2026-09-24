@@ -1,58 +1,22 @@
-# Template for the HighLoad course
-This project is based on [Tiny Event Sourcing library](https://github.com/andrsuh/tiny-event-sourcing)
+## Кейс #1
 
-### Run PostgreSql
-This example uses Postgres as an implementation of the Event store. You can see it in `pom.xml`:
+**Задание:** обработать входящий поток заказов со скоростью `ratePerSecond = 11` (`testCount = 1200`), передавая оплаты во внешнюю платёжную систему через аккаунт `acc-3` с соблюдением его лимитов (`rateLimitPerSec`, `parallelRequests`).
 
-```
-<dependency>
-    <groupId>ru.quipy</groupId>
-    <artifactId>tiny-postgres-event-store-spring-boot-starter</artifactId>
-    <version>${tiny.es.version}</version>
-</dependency>
-```
+### Решение
 
-Thus, you have to run Postgres in order to test this example. Postgres service is included in  `docker-compose` file that we have in the root of the project.
+**`AccountWorker`** - отдельный воркер на каждый аккаунт:
 
-# More comprehensive information about the course, project, how to run tests is here:
+- **Явная очередь** `LinkedBlockingQueue` фиксированного размера (10 000) - основа back pressure. При переполнении платёж не принимается, а не копится в неявных очередях, которые скрыты внутри библиотек.
+- **Rate limit** соблюдается блокирующим `tickBlocking()` на скользящем окне (`SlidingWindowRateLimiter`) прямо в loop-потоке воркера. Скользящее окно выбрано вместо фиксированного, потому что оно устойчиво к «двойной» пиковой нагрузке на стыке окон.
+- **Ограничение параллельности** через `Semaphore(parallelRequests)`, который захватывается **до** постановки задачи в executor. Это исключает накопление неограниченной очереди внутри `ThreadPoolExecutor`.
+- **Учёт `deadline`**: просроченные платежи отбрасываются до отправки, чтобы не тратить деньги на заведомо бесполезные вызовы.
 
-https://andrsuh.notion.site/2595d535059281d8a815c2cb3875c376?source=copy_link
+**`PaymentSystemImpl`** - вместо рассылки платежа сразу во все аккаунты выбирает **один** аккаунт через round-robin и передаёт задачу в соответствующий воркер.
 
-https://andrsuh.notion.site/2625d5350592801aaf88c7c95302d10c?source=copy_link
+**Дополнительно:**
+- Таймауты OkHttp выставлены с учётом `averageProcessingTime` внешней системы.
+- Конфигурация: `payment.accounts=acc-3`, параметры теста в `test-local-run.http` (`ratePerSecond: 11`, `testCount: 1200`).
 
-### Run the infrastructure
-Set of the services you need to start developing and testing process is following:
-- Bombardier - service that is in charge of emulation the store's clients activity (creates the incoming load). Also serves as a third-party payment system.
-- Postgres DBMS
-- Prometheus + Grafana - metrics collection and visualization services
-
-You can run all beforementioned services by the following command:
-```
-docker compose -f docker-compose.yml up
-```
-
-### Run the application
-To make the application run you can start the main class `OnlineShopApplication`. It is not being launched as a docker contained to simplify and speed up the devevopment process as it is easier for you to refactor the application and re-run it immediately in the IDE.
-
-
-### If you want to pull changes from the main repository into your fork
-
-The command ```git remote -v``` should include the following lines:
-
-```
-upstream        https://github.com/andrsuh/high-load-course.git (fetch)
-upstream        https://github.com/andrsuh/high-load-course.git (push)
-```
-
-If not, add the upstream remote:
-```git remote add upstream https://github.com/andrsuh/high-load-course.git```
-
-To pull changes from the main repository, run the following commands:
-
-```
-git fetch upstream
-# switch to the main branch of your fork. Make sure the branch has no uncommitted changes to avoid conflicts
-git checkout main 
-# merge changes from the main repository into your main branch
-git merge upstream/main 
-```
+### Результаты теста (Grafana)
+![img.png](screenshots/img.png)
+![img_1.png](screenshots/img_1.png)
