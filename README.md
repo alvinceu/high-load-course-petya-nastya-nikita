@@ -18,5 +18,8 @@
 - Конфигурация: `payment.accounts=acc-3`, параметры теста в `test-local-run.http` (`ratePerSecond: 11`, `testCount: 1200`).
 
 ### Результаты теста (Grafana)
-![img.png](screenshots/img.png)
-![img_1.png](screenshots/img_1.png)
+| Метрика | Порог | Результат |
+|---|---|---|
+| Income / Expenses | >= 93/7 | **93.1 / 6.87** |
+| Success Percent (per minute) | > 97% | **100%** |
+| Tests run (SUCCESS vs FAIL/ERROR) | SUCCESS значительно больше | **SUCCESS 2441, FAIL 0** |
