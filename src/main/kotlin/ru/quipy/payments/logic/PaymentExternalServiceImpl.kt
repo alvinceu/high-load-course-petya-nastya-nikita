@@ -34,6 +34,7 @@ class PaymentExternalSystemAdapterImpl(
     private val rateLimitPerSec = properties.rateLimitPerSec
     private val parallelRequests = properties.parallelRequests
 
+    private val rateLimiter = ru.quipy.common.utils.SlidingWindowRateLimiter(rateLimitPerSec.toLong(), requestAverageProcessingTime)
     private val client = OkHttpClient.Builder().build()
 
     override fun performPaymentAsync(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
@@ -47,6 +48,7 @@ class PaymentExternalSystemAdapterImpl(
             it.logSubmission(success = true, transactionId, now(), Duration.ofMillis(now() - paymentStartedAt))
         }
 
+        rateLimiter.tickBlocking()
         logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
 
         try {
