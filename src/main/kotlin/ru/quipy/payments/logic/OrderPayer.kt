@@ -1,5 +1,8 @@
 package ru.quipy.payments.logic
 
+import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -12,13 +15,13 @@ import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
-
 @Service
-class OrderPayer {
+class OrderPayer(private val meterRegistry: MeterRegistry) {
 
     companion object {
         val logger: Logger = LoggerFactory.getLogger(OrderPayer::class.java)
     }
+    private val overdueTasksCounter = Counter.builder("payment_overdue_tasks").register(meterRegistry)
 
     @Autowired
     private lateinit var paymentESService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>
@@ -36,13 +39,24 @@ class OrderPayer {
         CallerBlockingRejectedExecutionHandler()
     )
 
+    init {
+        ExecutorServiceMetrics.monitor(
+            meterRegistry,
+            paymentExecutor,
+            "payment-submission-executor"
+        )
+    }
+
     fun processPayment(orderId: UUID, amount: Int, paymentId: UUID, deadline: Long): Long {
         val createdAt = System.currentTimeMillis()
         paymentExecutor.submit {
             val elapsed = System.currentTimeMillis() - createdAt
+
             if (elapsed >= 50_000) {
+                overdueTasksCounter.increment()
                 return@submit
             }
+
             val createdEvent = paymentESService.create {
                 it.create(
                     paymentId,
