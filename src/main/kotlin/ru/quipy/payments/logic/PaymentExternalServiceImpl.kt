@@ -37,7 +37,7 @@ class PaymentExternalSystemAdapterImpl(
 
     // Payment accounts list:
     //PaymentAccountProperties(serviceName=cas-m3404-08, accountName=acc-5, parallelRequests=5, rateLimitPerSec=3, price=30, averageProcessingTime=PT4.9S, enabled=true)
-    private val lock = Semaphore(parallelRequests) // parallelRequests=5 у внешнего сервиса
+    private val lock = Semaphore(5) // parallelRequests=5 у внешнего сервиса
 
     private val rateLimiter = SlidingWindowRateLimiter(3.toLong(), Duration.ofSeconds(1)) // rpc 3 внешнему сервису
 
@@ -56,9 +56,8 @@ class PaymentExternalSystemAdapterImpl(
 
         logger.info("[$accountName] Submit: $paymentId , txId: $transactionId")
 
-        rateLimiter.tickBlocking()
         lock.acquire()
-
+        rateLimiter.tickBlocking()
         try {
             try {
                 val request = Request.Builder().run {
