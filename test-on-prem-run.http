@@ -9,7 +9,7 @@ Content-Type: application/json
   "branch": "feature/hw-02-ratelimiter-with-semaphore",
   "accounts": "acc-5",
   "ratePerSecond": 2,
-  "testCount": 100,
+  "testCount": 500,
   "processingTimeMillis": 60000,
   "onPremises": true
 }
