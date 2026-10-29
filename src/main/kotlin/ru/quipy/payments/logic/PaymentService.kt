@@ -4,6 +4,7 @@ import java.time.Duration
 import java.util.*
 
 interface PaymentService {
+    fun checkDeadline(deadline: Long)
     /**
      * Submit payment request to some external service.
      */
@@ -24,6 +25,10 @@ interface PaymentExternalSystemAdapter {
     fun price(): Int
 
     fun isEnabled(): Boolean
+
+    fun rpc(): Double
+    fun rapt(): Duration
+    fun pr(): Double
 }
 
 /**

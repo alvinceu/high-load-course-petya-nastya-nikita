@@ -2,28 +2,18 @@ package ru.quipy.payments.logic
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import io.micrometer.core.instrument.MeterRegistry
-import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
 import org.slf4j.LoggerFactory
-import ru.quipy.common.utils.CallerBlockingRejectedExecutionHandler
-import ru.quipy.common.utils.NamedThreadFactory
-import ru.quipy.common.utils.TokenBucketRateLimiter
 import ru.quipy.core.EventSourcingService
 import ru.quipy.payments.api.PaymentAggregate
 import java.net.SocketTimeoutException
 import java.time.Duration
 import java.util.*
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
-import kotlin.math.ceil
 
 // Advice: always treat time as a Duration
 class PaymentExternalSystemAdapterImpl(
-    private val meterRegistry: MeterRegistry,
     private val properties: PaymentAccountProperties,
     private val paymentESService: EventSourcingService<UUID, PaymentAggregate, PaymentAggregateState>,
     private val paymentProviderHostPort: String,
@@ -39,58 +29,10 @@ class PaymentExternalSystemAdapterImpl(
 
     private val serviceName = properties.serviceName
     private val accountName = properties.accountName
-    private val requestAverageProcessingTime = properties.averageProcessingTime
-    private val rateLimitPerSec = properties.rateLimitPerSec
-    private val parallelRequests = properties.parallelRequests
-
-    private val countOfThreads = ceil(rateLimitPerSec * requestAverageProcessingTime.seconds * 1.2)
-        .toInt()
-        .coerceIn(1, parallelRequests)
-
-    //NOTE:
-    // в случае перегрузки мы 30 минут имеем обработать что-то и блокируем закрыты от внешнего сервиса.
-    private val countTasksInQueue = ceil(1800.0 / (rateLimitPerSec / requestAverageProcessingTime.seconds.toDouble())).toInt()
-
-    private val limiter = TokenBucketRateLimiter(
-        rateLimitPerSec,
-        rateLimitPerSec,
-        requestAverageProcessingTime.seconds,
-        TimeUnit.SECONDS
-    )
-
-    //TODO:
-    // single responsibility нарушен, надо будет вынести в отдельный класс worker и т.д., если важно
-    private val executor = ThreadPoolExecutor(
-        countOfThreads,
-        countOfThreads,
-        0L,
-        TimeUnit.MILLISECONDS,
-        LinkedBlockingQueue(countTasksInQueue),
-        NamedThreadFactory(properties.accountName),
-        CallerBlockingRejectedExecutionHandler() //TODO: убрать, пусть пока так. 2 слой плохо!
-    )
-
-    init {
-        ExecutorServiceMetrics.monitor(
-            meterRegistry,
-            executor,
-            "executor-${properties.accountName}"
-        )
-    }
 
     private val client = OkHttpClient.Builder().build()
 
-    //NOTE:
-    // отменять заказы низя, пасхалка тут CallerBlockingRejectedExecutionHandler
-    // "Even if event is rejected we will still keep it, trying to put in queue so that not to lose it!"
     override fun performPaymentAsync(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
-        limiter.tick()
-        executor.submit {
-            performPayment(paymentId, amount, paymentStartedAt, deadline)
-        }
-    }
-
-    private fun performPayment(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
         logger.warn("[$accountName] Submitting payment request for payment $paymentId")
 
         val transactionId = UUID.randomUUID()
@@ -150,7 +92,9 @@ class PaymentExternalSystemAdapterImpl(
     override fun isEnabled() = properties.enabled
 
     override fun name() = properties.accountName
-
+    override fun rpc() = properties.rateLimitPerSec.toDouble()
+    override fun rapt() = properties.averageProcessingTime
+    override fun pr() = properties.parallelRequests.toDouble()
 }
 
 public fun now() = System.currentTimeMillis()

@@ -19,7 +19,6 @@ import java.util.*
 
 @Configuration
 class PaymentAccountsConfig(
-    private val meterRegistry: MeterRegistry,
 ) {
     companion object {
         private val javaClient = HttpClient.newBuilder().build()
@@ -57,7 +56,6 @@ class PaymentAccountsConfig(
             .onEach(::println)
             .map {
                 PaymentExternalSystemAdapterImpl(
-                    meterRegistry,
                     it,
                     paymentService,
                     paymentProviderHostPort,
