@@ -20,10 +20,12 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.collections.sumOf
 import kotlin.concurrent.withLock
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
@@ -36,8 +38,11 @@ class PaymentSystemImpl(
     companion object {
         val logger = LoggerFactory.getLogger(PaymentSystemImpl::class.java)
         val tasksDefault = 1800.0
-    }
 
+        val coffAdmit = 1.5
+        val coffSend = 1.5
+    }
+    private val queueSize = AtomicInteger(0)
     private val accounts = paymentAccounts.map { Account(it) }
     private val threads = accounts.sumOf { it.threads }
     private val throughput = accounts.sumOf { it.throughput }
@@ -61,27 +66,45 @@ class PaymentSystemImpl(
         )
     }
 
+    override fun foo(deadline: Long) {
+        val now = System.currentTimeMillis()
+        val delta = deadline - now - maxProcessSec.toMillis() * coffAdmit
+        val throughputMil = throughput / 1000.0 / coffAdmit
+        val canProcessInQueue = ceil(throughputMil * delta)
+
+        val temp = queueSize.decrementAndGet()
+        val res =  temp - canProcessInQueue
+
+        throw TooManyRequestsException(now + ((max(res, 1.0)) / throughputMil).toLong())
+    }
+
     override fun checkDeadline(deadline: Long) {
         val now = System.currentTimeMillis()
-        val delta = deadline - now - maxProcessSec.toMillis() * 1.2
-        val throughputMil = throughput / 1000.0 / 1.2
-        val canProcessInQueue= ceil(throughputMil * delta)
-        val res = executor.queue.size - canProcessInQueue
+        val delta = deadline - now - maxProcessSec.toMillis() * coffAdmit
+        val throughputMil = throughput / 1000.0 / coffAdmit
+        val canProcessInQueue = ceil(throughputMil * delta)
+
+        val temp = queueSize.incrementAndGet()
+        val res =  temp - canProcessInQueue
 
         val val1 = delta <= 0
-        val val2 = res >= 0
-        val val3 = executor.queue.remainingCapacity() == 0
+        val val2 = res > 0
+        val val3 = temp > ordersInQueue
 
         if (val1 || val2 || val3) {
-            throw TooManyRequestsException(now + ((max(res, 0.0)  + 1) / throughputMil).toLong())
+            queueSize.decrementAndGet()
+            throw TooManyRequestsException(now + ((max(res, 1.0)) / throughputMil).toLong())
         }
     }
 
     override fun submitPaymentRequest(paymentId: UUID, amount: Int, paymentStartedAt: Long, deadline: Long) {
         executor.submit {
-            while (deadline - System.currentTimeMillis() - maxProcessSec.toMillis() * 1.2 >= 0) {
+            while (deadline - System.currentTimeMillis() - maxProcessSec.toMillis() * coffSend >= 0) {
                 for (account in accounts) {
                     if (account.tryAcquire()) {
+                        //TODO:
+                        // местечко под обработку ошибки, пака было лень
+                        queueSize.decrementAndGet()
                         try {
                             account.adapter.performPaymentAsync(paymentId, amount, paymentStartedAt, deadline)
                         } finally {
@@ -92,6 +115,7 @@ class PaymentSystemImpl(
                 }
                 Thread.sleep(10)
             }
+            queueSize.decrementAndGet()
             logger.error("IMPOSSIBLE :)")
         }
     }
@@ -100,12 +124,12 @@ class PaymentSystemImpl(
         val adapter: PaymentExternalSystemAdapter
     ) {
         val processSec =  adapter.rapt()
-        val threads = ceil(adapter.rpc() * processSec.seconds.toDouble())
+        val threads = ceil(adapter.rpc() * processSec.toSeconds().toDouble())
             .toInt()
             .coerceIn(1, adapter.pr().toInt())
         val throughput = min(adapter.rpc(), (threads.toDouble() / (processSec.toMillis() / 1000.0)))
         private val sema = Semaphore(threads)
-        private val limiter = SlidingWindowRateLimiter(adapter.rpc().toLong(), Duration.ofSeconds(1))
+        private val limiter = SlidingWindowRateLimiter(adapter.rpc().toLong() , Duration.ofSeconds(1))
 
         fun tryAcquire(): Boolean {
             if (!sema.tryAcquire()) {
