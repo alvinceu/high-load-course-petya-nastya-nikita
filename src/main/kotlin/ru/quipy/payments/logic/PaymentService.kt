@@ -4,6 +4,7 @@ import java.time.Duration
 import java.util.*
 
 interface PaymentService {
+    fun checkDeadline1(deadline: Long)
     fun checkDeadline(deadline: Long)
     /**
      * Submit payment request to some external service.

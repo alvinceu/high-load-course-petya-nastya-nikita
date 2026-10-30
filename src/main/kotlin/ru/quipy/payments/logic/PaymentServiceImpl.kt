@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import ru.quipy.common.utils.LeakingBucketRateLimiter
 import ru.quipy.common.utils.NamedThreadFactory
 import ru.quipy.common.utils.SlidingWindowRateLimiter
 import ru.quipy.common.utils.TooManyRequestsException
@@ -11,6 +12,7 @@ import java.time.Duration
 import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.Semaphore
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -30,7 +32,7 @@ class PaymentSystemImpl(
         val tasksDefault = 1800.0
 
         val coffMoreThreads = 1.5
-        val coffAdmit = 1.2
+        val coffAdmit = 1
         val coffSend = 1
     }
     private val queueSize = AtomicInteger(0)
@@ -50,6 +52,14 @@ class PaymentSystemImpl(
         ThreadPoolExecutor.AbortPolicy()
     )
 
+    private val limiter = LeakingBucketRateLimiter(
+        rate = throughput.toLong(),
+        window = Duration.ofSeconds(1),
+        bucketSize = 300, // тоже самое throughputMil * deadline - now - maxProcessSec.toMillis() * coffAdmit
+        // и учитываем огроничение очереди, но мне мой вариант пока больше нравится
+        // добавлю для несогласных
+    )
+
     init {
         ExecutorServiceMetrics.monitor(
             meterRegistry,
@@ -57,8 +67,17 @@ class PaymentSystemImpl(
             "executor-payment-sys-main"
         )
     }
+    override fun checkDeadline1(deadline: Long) {
+        val now = System.currentTimeMillis()
+        if (!limiter.tick()) {
+            // +1 секунду сделаю.
+            val jitter = ThreadLocalRandom.current().nextLong(1000)
+            throw TooManyRequestsException(now + 777 + jitter)
+        }
+    }
 
     override fun checkDeadline(deadline: Long) {
+        // Я написал leaky bucket случайно.
         val now = System.currentTimeMillis()
         val delta = deadline - now - maxProcessSec.toMillis() * coffAdmit
         val throughputMil = throughput / 1000.0 / coffAdmit
@@ -73,8 +92,7 @@ class PaymentSystemImpl(
 
         if (val1 || val2 || val3) {
             queueSize.decrementAndGet()
-            val retryAt = now + ((max(res, 1.0)) / throughputMil).toLong()
-            throw TooManyRequestsException(min(retryAt, deadline))
+            throw TooManyRequestsException(now + ((max(res, 1.0)) / throughputMil).toLong())
         }
     }
 
