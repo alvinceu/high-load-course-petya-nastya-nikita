@@ -1,7 +1,9 @@
 package ru.quipy.config
 
 import jakarta.annotation.PostConstruct
+import org.eclipse.jetty.http2.WindowRateControl
 import org.eclipse.jetty.http2.server.HTTP2CServerConnectionFactory
+import org.eclipse.jetty.server.ServerConnector
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.web.embedded.jetty.JettyServerCustomizer
@@ -71,7 +73,12 @@ class EventSourcingLibConfiguration {
         val jettyServletWebServerFactory = JettyServletWebServerFactory()
 
         val c = JettyServerCustomizer {
-            (it.connectors[0].getConnectionFactory("h2c") as HTTP2CServerConnectionFactory).maxConcurrentStreams = 10_000_000
+            val connector = it.connectors[0] as ServerConnector
+            connector.acceptQueueSize = 2048
+            val h2c = connector.getConnectionFactory("h2c") as HTTP2CServerConnectionFactory
+            h2c.maxConcurrentStreams = 10_000_000
+            h2c.rateControlFactory = WindowRateControl.Factory(10_000_000)
+            h2c.maxDecoderTableCapacity = 0
         }
 
         jettyServletWebServerFactory.serverCustomizers.add(c)

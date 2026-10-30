@@ -4,6 +4,8 @@ import java.time.Duration
 import java.util.*
 
 interface PaymentService {
+    fun checkDeadline1(deadline: Long)
+    fun checkDeadline(deadline: Long)
     /**
      * Submit payment request to some external service.
      */
@@ -24,6 +26,10 @@ interface PaymentExternalSystemAdapter {
     fun price(): Int
 
     fun isEnabled(): Boolean
+
+    fun rpc(): Double
+    fun rapt(): Duration
+    fun pr(): Double
 }
 
 /**
@@ -35,7 +41,7 @@ data class PaymentAccountProperties(
     val parallelRequests: Int,
     val rateLimitPerSec: Int,
     val price: Int,
-    val averageProcessingTime: Duration = Duration.ofSeconds(11),
+    val averageProcessingTime: Duration,
     val enabled: Boolean,
 )
 

@@ -12,7 +12,6 @@ import java.net.SocketTimeoutException
 import java.time.Duration
 import java.util.*
 
-
 // Advice: always treat time as a Duration
 class PaymentExternalSystemAdapterImpl(
     private val properties: PaymentAccountProperties,
@@ -30,9 +29,6 @@ class PaymentExternalSystemAdapterImpl(
 
     private val serviceName = properties.serviceName
     private val accountName = properties.accountName
-    private val requestAverageProcessingTime = properties.averageProcessingTime
-    private val rateLimitPerSec = properties.rateLimitPerSec
-    private val parallelRequests = properties.parallelRequests
 
     private val client = OkHttpClient.Builder().build()
 
@@ -96,7 +92,9 @@ class PaymentExternalSystemAdapterImpl(
     override fun isEnabled() = properties.enabled
 
     override fun name() = properties.accountName
-
+    override fun rpc() = properties.rateLimitPerSec.toDouble()
+    override fun rapt() = properties.averageProcessingTime
+    override fun pr() = properties.parallelRequests.toDouble()
 }
 
 public fun now() = System.currentTimeMillis()

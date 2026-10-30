@@ -1,3 +1,4 @@
+### hw-1
 ### Run test locally
 POST http://localhost:1234/test/run
 Content-Type: application/json
@@ -5,9 +6,94 @@ Content-Type: application/json
 {
   "serviceName": "{{serviceName}}",
   "token": "{{token}}",
-  "ratePerSecond": 1,
+  "accounts": "acc-3",
+  "ratePerSecond": 11,
+  "testCount": 1200
+}
+
+### hw-2
+### Run test locally
+POST http://localhost:1234/test/run
+Content-Type: application/json
+
+{
+  "serviceName": "{{serviceName}}",
+  "token": "{{token}}",
+  "accounts": "acc-5",
+  "ratePerSecond": 2,
   "testCount": 100,
-  "processingTimeMillis": 80000
+  "processingTimeMillis": 60000
+}
+### hw-3
+### Run test locally
+POST http://localhost:1234/test/run
+Content-Type: application/json
+
+{
+  "serviceName": "{{serviceName}}",
+  "token": "{{token}}",
+  "accounts": "acc-5",
+  "ratePerSecond": 2,
+  "testCount": 500,
+  "processingTimeMillis": 60000
+}
+
+### hw-4
+### Run test locally
+POST http://localhost:1234/test/run
+Content-Type: application/json
+
+{
+  "serviceName": "{{serviceName}}",
+  "token": "{{token}}",
+  "accounts": "acc-18",
+  "ratePerSecond": 200,
+  "testCount": 6000,
+  "processingTimeMillis": 3000
+}
+
+### hw-5-1
+### Run test locally
+POST http://localhost:1234/test/run
+Content-Type: application/json
+
+{
+  "serviceName": "{{serviceName}}",
+  "token": "{{token}}",
+  "accounts": "acc-23",
+  "ratePerSecond": 15,
+  "testCount": 3000,
+  "processingTimeMillis": 2500
+}
+
+### hw-5-2
+### Run test locally
+POST http://localhost:1234/test/run
+Content-Type: application/json
+
+{
+  "serviceName": "{{serviceName}}",
+  "token": "{{token}}",
+  "accounts": "acc-23",
+  "ratePerSecond": 11,
+  "testCount": 2200,
+  "processingTimeMillis": 13000,
+  "profile": "s_0.7_60"
+}
+
+### hw-5-3
+### Run test locally
+POST http://localhost:1234/test/run
+Content-Type: application/json
+
+{
+  "serviceName": "{{serviceName}}",
+  "token": "{{token}}",
+  "accounts": "acc-23",
+  "ratePerSecond": 3,
+  "testCount": 1050,
+  "processingTimeMillis": 26000,
+  "runits": 90
 }
 
 ### Stop running test to save time and resources
