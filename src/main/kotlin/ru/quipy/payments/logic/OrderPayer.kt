@@ -26,20 +26,14 @@ class OrderPayer {
         // подумать про поведение в случае ошибок между компонентами данного метода
         paymentService.checkDeadline(deadline)
 
-//        try {
-            val createdEvent = paymentESService.create {
-                it.create(
-                    paymentId,
-                    orderId,
-                    amount
-                )
-            }
-            logger.trace("Payment {} for order {} created.", createdEvent.paymentId, orderId)
-//
-//        } catch (e: Exception) {
-//            logger.error("MAKE SENSE")
-//            paymentService.foo(deadline)
-//        }
+        val createdEvent = paymentESService.create {
+            it.create(
+                paymentId,
+                orderId,
+                amount
+            )
+        }
+        logger.trace("Payment {} for order {} created.", createdEvent.paymentId, orderId)
 
         paymentService.submitPaymentRequest(
             paymentId,
@@ -47,6 +41,7 @@ class OrderPayer {
             createdAt,
             deadline
         )
+
         return createdAt
     }
 }
